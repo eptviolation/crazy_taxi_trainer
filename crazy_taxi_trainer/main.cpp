@@ -27,6 +27,7 @@
 	.data:016A41A4 ?? ?? ?? ??                                     g_global_tick_count dd ?                ; DATA XREF: sub_4B3D00+73r
 */
 #define OFFSET_GLOBAL_TICK_COUNT 0x12A41A4
+#define OFFSET_PASSENGER_TICK_COUNT 0x12A41DC
 
 // returns the first process found by name
 BOOL get_process_by_name(CONST TCHAR *image_name, DWORD *store_pid) {
@@ -102,7 +103,7 @@ end:
 	return success;
 }
 
-void patch_timer(LONG new_time) {
+void time_hack(LONG new_global_time, LONG new_passenger_time) {
 	BOOL success;
 	HANDLE target;
 	BYTE *remote_mod_base;
@@ -127,13 +128,21 @@ void patch_timer(LONG new_time) {
 		goto end;
 	}
 
-	success = WriteProcessMemory(target, remote_mod_base + OFFSET_GLOBAL_TICK_COUNT, &new_time, sizeof(new_time), NULL);
+	success = WriteProcessMemory(target, remote_mod_base + OFFSET_GLOBAL_TICK_COUNT,
+								 &new_global_time, sizeof(new_global_time), NULL);
 	if(!success) {
-		_tprintf(_T("[-] error: could not patcht the remote process%d\n"), GetLastError());
+		_tprintf(_T("[-] error: could not patch the global tick count in remote process %d\n"), GetLastError());
 		goto end;
 	}
 
-	_tprintf(_T("[+] Adjusted the time to %d\n"), new_time);
+	success = WriteProcessMemory(target, remote_mod_base + OFFSET_PASSENGER_TICK_COUNT,
+								 &new_passenger_time, sizeof(new_passenger_time), NULL);
+	if(!success) {
+		_tprintf(_T("[-] error: could not patch the passenger tick count remote process %d\n"), GetLastError());
+		goto end;
+	}
+
+	_tprintf(_T("[+] Adjusted the global time to %d passenger time to %d\n"), new_global_time, new_passenger_time);
 
 end:
 	return;
@@ -146,10 +155,10 @@ int main(int argc, char *argv[]) {
 
 	while(true) {
 		if(GetAsyncKeyState(VK_F1)) {
-			patch_timer(-1);
+			time_hack(36000, 36000);
 		}
 		if(GetAsyncKeyState(VK_F2)) {
-			patch_timer(0);
+			time_hack(0, 0);
 		}
 		Sleep(1000);
 	}
